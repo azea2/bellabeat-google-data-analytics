@@ -1,0 +1,273 @@
+---
+title: "Estudio de Caso: Bellabeat - Google Data Analytics"
+author: "Angela Maria Zea Mesa"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+# Fase 1: Preguntar
+
+## Tarea empresarial
+
+Bellabeat es una empresa de tecnología enfocada en el bienestar de la mujer. La organización desea comprender cómo los consumidores usan los dispositivos inteligentes, con el fin de descubrir oportunidades de crecimiento, y orientar su estrategia de marketing. El equipo ejecutivo quiere utilizar esta información para identificar cómo los productos de Bellabeat pueden beneficiarse de estas tendencias.
+
+**Tarea principal:**  
+Analizar los datos de uso de dispositivos inteligentes (no Bellabeat) para identificar patrones clave que puedan ser aplicados a un producto de Bellabeat y así generar recomendaciones de alto nivel para su estrategia de marketing.
+
+## Preguntas orientadoras
+
+1. ¿Cuáles son algunas tendencias en el uso de dispositivos inteligentes?
+2. ¿Cómo podrían aplicarse estas tendencias a los clientes de Bellabeat?
+3. ¿Cómo podrían estas tendencias ayudar a influir en la estrategia de marketing de Bellabeat?
+
+## Partes interesadas clave
+
+- **Urška Sršen:** Cofundadora y directora creativa de Bellabeat.
+- **Sando Mur:** Cofundador y miembro del equipo ejecutivo.
+- **Equipo de análisis de marketing:** Encargado de guiar las decisiones estratégicas.
+- **Analista de datos júnior (yo):** Encargado del análisis y presentación de hallazgos.
+
+## Contribución del análisis de datos
+
+Este análisis busca:
+
+- Identificar patrones de comportamiento en usuarios de dispositivos inteligentes.
+- Detectar oportunidades para personalizar y mejorar los productos Bellabeat.
+- Brindar recomendaciones estratégicas y sostenibles a partir de datos reales.
+
+
+# Fase 2: Preparar
+
+En esta fase se realiza la recopilación de datos relevantes para el análisis. Se utilizan datos públicos extraídos del repositorio de Kaggle que contienen información de 30 usuarios de dispositivos Fitbit, quienes accedieron a compartir sus datos personales generados mediante el seguimiento de su actividad física, sueño y hábitos de salud durante un período de 31 días.
+
+## Origen de los datos
+Los datos fueron proporcionados por Möbius a través del portal Kaggle. Este conjunto incluye múltiples archivos CSV, entre los cuales destacan:
+
+- dailyActivity_merged.csv: información sobre pasos diarios, distancia, minutos activos y tiempo sedentario.
+
+- sleepDay_merged.csv: datos sobre minutos dormidos, tiempo en cama y registros de sueño.
+
+Estos datos serán utilizados para realizar un análisis exploratorio con el fin de identificar patrones que permitan a Bellabeat comprender mejor el comportamiento de sus usuarios y así apoyar la toma de decisiones estratégicas.
+
+## Credibilidad de los datos
+Aunque los datos provienen de un entorno controlado y voluntario, su origen no está verificado por una entidad oficial o científica, lo que debe tenerse en cuenta al interpretar los resultados. No obstante, debido a la naturaleza del caso de estudio y su propósito exploratorio, los datos se consideran adecuados para el análisis.
+
+## Licencia de uso
+Los datos están disponibles de forma pública bajo la licencia de uso de Kaggle. Se permite su uso para fines educativos y de análisis sin fines de lucro, como el presente caso de estudio.
+
+
+# Fase 3: Procesar los datos - Limpieza y preparación
+
+```{r}
+# Cargar librerías necesarias
+library(tidyverse)
+library(lubridate)
+library(janitor)
+library(corrplot)
+```
+
+```{r}
+# Cargar los archivos CSV
+daily_activity <- read_csv("dailyActivity_merged.csv") %>% clean_names()
+minute_sleep <- read_csv("minuteSleep_merged.csv") %>% clean_names()
+```
+
+```{r}
+# Convertir las fechas al formato adecuado
+daily_activity <- daily_activity %>%
+  mutate(activity_date = mdy(activity_date))
+
+minute_sleep <- minute_sleep %>%
+  mutate(date = mdy_hms(date))  # columna 'date' ya existe
+```
+
+```{r}
+# Eliminar duplicados
+daily_activity <- daily_activity %>% distinct()
+minute_sleep <- minute_sleep %>% distinct()
+
+# Revisar si hay valores faltantes
+sum(is.na(daily_activity))
+sum(is.na(minute_sleep))
+```
+
+```{r}
+# Crear un resumen diario de minutos dormidos por usuario
+sleep_summary <- minute_sleep %>%
+  filter(value == 1) %>%  # 1 indica que estaba dormido
+  group_by(id, date) %>%
+  summarise(total_minutes_asleep = n()) %>%
+  ungroup()
+```
+
+```{r}
+# Unir los datasets
+combined_data <- left_join(daily_activity, sleep_summary, by = c("id" = "id", "activity_date" = "date"))
+
+# Eliminar NA en columnas clave para evitar errores en análisis posteriores
+combined_data <- combined_data %>%
+  drop_na(total_steps, total_minutes_asleep)
+```
+
+```{r}
+# Revisar el dataset combinado
+glimpse(combined_data)
+summary(combined_data)
+```
+
+En esta fase se realizó la limpieza, transformación y unión de los datos extraídos de los dispositivos Fitbit, con el fin de facilitar su análisis. Se trabajó principalmente con dos archivos:
+
+- dailyActivity_merged.csv: contiene el resumen diario de actividad física de cada usuario.
+
+- minuteSleep_merged.csv: contiene registros minuto a minuto de los periodos de sueño.
+
+Se aplicaron las siguientes transformaciones:
+
+- Limpieza de nombres de columnas con janitor::clean_names() para estandarizar y facilitar su uso.
+
+- Conversión de fechas al formato adecuado utilizando lubridate::mdy() y mdy_hms(), permitiendo realizar agrupaciones y cruces por día.
+
+- Filtrado de los registros de sueño, manteniendo únicamente los minutos en los que el usuario efectivamente estuvo dormido (value == 1).
+
+- Agrupación de los datos de sueño por id y fecha, calculando el total de minutos dormidos por día.
+
+- Unión de los datasets de actividad y sueño mediante left_join(), usando como claves el id del usuario y la fecha.
+
+- Eliminación de valores faltantes (NA) en variables clave como total_steps y total_minutes_asleep para garantizar la consistencia en los análisis posteriores.
+
+El resultado es un conjunto de datos consolidado llamado combined_data, que permite explorar la relación entre variables como pasos, minutos de actividad y sueño. Esta preparación deja la base lista para iniciar la fase de análisis exploratorio.
+
+
+# Fase 4: Analizar
+
+### Exploración y análisis de los datos
+A partir del conjunto de datos limpio y consolidado, se lleva a cabo un análisis exploratorio con el fin de identificar patrones y relaciones entre variables relevantes. El propósito es comprender cómo los hábitos de sueño, actividad física y sedentarismo se interrelacionan, y de qué forma estos comportamientos pueden guiar decisiones estratégicas para mejorar el bienestar de las usuarias y orientar la estrategia de marketing de Bellabeat.
+
+### 1. 📊 Ver distribución de pasos diarios
+```{r}
+# Calcular promedio de pasos para destacar en la anotación
+avg_steps <- mean(combined_data$total_steps, na.rm = TRUE)
+
+ggplot(combined_data, aes(x = total_steps)) +
+  geom_histogram(binwidth = 1000, fill = "darkolivegreen", color = "white") +
+  geom_vline(aes(xintercept = avg_steps), color = "red", linetype = "dashed", size = 1) +
+  annotate("text", x = avg_steps + 500, y = 30, label = paste("Promedio:", round(avg_steps)), color = "red", hjust = 0) +
+  labs(
+    title = "Distribución de pasos diarios",
+    subtitle = "La mayoría de los usuarios da entre 5,000 y 10,000 pasos por día",
+    x = "Pasos diarios",
+    y = "Cantidad de usuarios"
+  ) +
+  theme_minimal()
+```
+
+La distribución de pasos diarios revela que la mayoría de los usuarios camina entre 5,000 y 10,000 pasos al día. Este rango suele asociarse con una actividad física moderada, aunque una parte significativa de los usuarios da menos de 5,000 pasos, lo que podría indicar un estilo de vida sedentario. El promedio de pasos diarios está alrededor de `r round(avg_steps)`, lo cual puede ser útil como punto de referencia para definir metas de actividad en las estrategias de marketing de Bellabeat.
+
+### 2. 📈 Relación entre pasos y minutos dormidos
+```{r}
+# Agrupar por fecha y calcular total de pasos diarios
+daily_steps <- combined_data %>%
+  group_by(activity_date) %>%
+  summarise(total_steps = sum(total_steps, na.rm = TRUE))
+
+# Asegurar que activity_date sea tipo fecha
+daily_steps$activity_date <- as.Date(daily_steps$activity_date)
+
+# Crear gráfico de línea con suavizado
+ggplot(daily_steps, aes(x = activity_date, y = total_steps)) +
+  geom_line(color = "steelblue") +
+  geom_smooth(method = "loess", se = FALSE, color = "darkred") +
+  labs(
+    title = "Tendencia de pasos diarios a lo largo del tiempo",
+    subtitle = "Con línea de tendencia suavizada (LOESS)",
+    x = "Fecha",
+    y = "Total de pasos"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+El gráfico de línea permite observar la evolución de los pasos diarios durante el periodo registrado. Se pueden identificar picos de actividad, así como días con una baja significativa en la cantidad de pasos. Este tipo de análisis es útil para detectar comportamientos repetitivos (como disminución de actividad los fines de semana) y puede orientar estrategias para promover la constancia en la actividad física.
+
+### 3. 📌 Correlación numérica
+```{r}
+# Calcular la matriz de correlación
+cor_matrix <- combined_data %>%
+  select(total_steps, very_active_minutes, lightly_active_minutes, sedentary_minutes, total_minutes_asleep) %>%
+  cor(use = "pairwise.complete.obs")
+
+# Convertir a formato largo para ggplot
+library(reshape2)
+cor_data <- melt(cor_matrix)
+
+# Crear heatmap con ggplot
+library(ggplot2)
+ggplot(cor_data, aes(x = Var1, y = Var2, fill = value)) +
+  geom_tile(color = "white") +
+  scale_fill_gradient2(
+    low = "red", mid = "white", high = "blue",
+    midpoint = 0, limit = c(-1, 1),
+    name = "Correlación"
+  ) +
+  geom_text(aes(label = round(value, 2)), color = "black", size = 4) +
+  labs(
+    title = "Matriz de correlación entre variables de actividad y sueño",
+    x = "", y = ""
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
+```
+
+El gráfico muestra de forma clara la intensidad y dirección de las relaciones entre diferentes variables relacionadas con la actividad física y el sueño.
+
+- Pasos totales (total_steps) presentan una correlación moderada a fuerte con los minutos de actividad ligera y muy activa, lo que sugiere que quienes caminan más también tienen más actividad física, como es de esperarse.
+
+- La relación con minutos sedentarios y minutos dormidos es cercana a cero, lo que indica que no hay una asociación directa entre caminar más y dormir más o estar más tiempo sedentario.
+
+- La relación entre minutos de sueño y otras variables también es muy débil, lo cual puede sugerir que el descanso no depende directamente del nivel de actividad registrado.
+
+Este tipo de análisis permite a Bellabeat identificar cuáles comportamientos están más conectados entre sí. En este caso, podría enfocarse en fomentar tanto la actividad ligera como la intensa, ya que ambas se relacionan directamente con un mayor nivel de movimiento general. Por otro lado, si la empresa desea mejorar los hábitos de sueño de sus usuarias, deberá explorar otras variables, dado que el nivel de actividad física no parece influir de manera significativa en la duración del sueño según estos datos.
+
+
+# Fase 5: Compartir
+
+### Resumen ejecutivo del análisis
+Este análisis exploratorio de los datos de dispositivos inteligentes permitió identificar patrones clave en los hábitos de sueño y actividad física de los usuarios, lo cual aporta información valiosa para orientar la estrategia de marketing de Bellabeat.
+
+### Principales hallazgos
+- La mayoría de los usuarios da entre 5.000 y 10.000 pasos diarios, lo que refleja un nivel de actividad moderado. Sin embargo, una proporción significativa no alcanza este rango, lo cual representa una oportunidad para promover hábitos más activos.
+
+- Existe una correlación positiva entre los pasos diarios y el tiempo de actividad física ligera, y una relación más moderada con la actividad muy intensa. Esto indica que incentivar pequeñas rutinas activas puede tener un alto impacto en el bienestar diario.
+
+- No se evidenció una relación fuerte entre el nivel de actividad y el tiempo de sueño, lo cual sugiere que las campañas de marketing enfocadas en sueño deben abordar este comportamiento como un factor independiente.
+
+### Recomendaciones para Bellabeat
+- ✔ Crear contenido educativo y motivacional que promueva caminatas ligeras y pausas activas diarias.
+- ✔ Diseñar campañas que diferencien los enfoques para mejorar el sueño y la actividad física, al no estar directamente correlacionados.
+- ✔ Usar estos insights para ajustar recordatorios personalizados en la app de Bellabeat, que fomenten el movimiento sin exigir rutinas intensas.
+
+
+### Limitaciones del análisis
+- El conjunto de datos incluye información de solo 30 usuarios y un periodo limitado de tiempo (31 días), lo cual puede no representar toda la diversidad de comportamientos de usuarias de Bellabeat.
+
+- La fuente de datos no proviene directamente de dispositivos Bellabeat, por lo tanto, los patrones deben considerarse como referenciales y no concluyentes.
+
+
+# Fase 6: Actuar
+A partir de los hallazgos obtenidos, se proponen acciones concretas para que Bellabeat optimice su estrategia de marketing y desarrollo de productos en función del comportamiento observado en los usuarios de dispositivos inteligentes.
+
+### 📌 Recomendaciones estratégicas
+- Promover la actividad física ligera y constante
+Dado que los pasos diarios muestran mayor correlación con minutos de actividad ligera, se recomienda centrar las campañas en pequeños cambios sostenibles: caminar más, estirarse cada cierto tiempo, rutinas suaves.
+
+- Incluir rutinas de alta intensidad en los planes personalizados
+Aunque la relación no es tan fuerte, los minutos de actividad muy activa también influyen en la cantidad de pasos. Bellabeat podría ofrecer programas mixtos (ligeros e intensos), adaptados al estilo de vida de cada usuaria.
+
+- Incentivar la constancia diaria con alertas o notificaciones
+Se evidencian variaciones diarias en la cantidad de pasos. Se sugiere implementar recordatorios motivacionales o desafíos diarios desde la app para reducir la inactividad en días bajos.
+
+- Evitar vincular directamente el sueño con la actividad
+La débil correlación sugiere que no se puede establecer una relación directa entre sueño y pasos. Bellabeat debe considerar estrategias independientes para mejorar el sueño (como sonidos relajantes, meditaciones, rutinas nocturnas) sin asociarlas directamente al nivel de actividad física.
+
+- Segmentar usuarias según su nivel de actividad
+Crear perfiles (sedentaria, moderadamente activa, activa) permite personalizar la experiencia dentro de la app, estableciendo objetivos progresivos y recomendaciones adaptadas.
